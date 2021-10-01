@@ -1,0 +1,276 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Список областей</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.0/css/bootstrap.min.css" rel="stylesheet" />
+    <script type="text/javascript" src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/14082/FileSaver.js"></script>
+</head>
+<body>
+    <table class="table table-condensed table-striped  col-md-5">
+        <tbody id="tb">
+        </tbody>
+    </table>
+    <div class="test" id="test">
+        <form name="buttonForm">
+            <input type="hidden" name="id" value="0" />
+            <input type="hidden" name="regionid" value="0" />
+            <input type="hidden" name="type" value="" />
+            <div id="ftb" class="form-group col-md-5" hidden>
+                <label for="name">Название:</label>
+                <input class="mx-sm-3 mb-3" name="name" />
+                <button id="submit" type="submit" hidden class="btn btn-success">Добавить</button>
+            </div>
+        </form>
+        <button id="home" onclick="GoHome()" class="btn btn-outline-primary">Главная</button>
+        <button onclick="downloadfile()" class="btn btn-secondary">Скачать страницу</button>
+    </div>
+    <script>
+
+    //Скачать файл
+    function downloadfile() {
+    var anchor = document.documentElement.innerHTML;
+    var htmlContent = [anchor];
+    var bl = new Blob(htmlContent, { type: "text/html;charset=utf-8" });
+    window.saveAs(bl, 'page.html');
+        }
+
+    let flag = 0; //0 - Region, 1 -City, 2- District
+
+    async function GetRegions() {
+    const response = await fetch("/api/Ukraine", {
+    method: "GET",
+    headers: { "Accept": "application/json" }
+    });
+    // если запрос прошел нормально
+    if (response.ok === true) {
+    flag = 0;
+    const regions = await response.json();
+
+    let rows = document.querySelector("tbody");
+    regions.forEach(region => {
+    rows.append(row(region, flag));  //отправка на формирование таблицы
+    });
+    }
+    }
+
+    //Получить конкретную строку
+    async function GetLine(spawn, url) {
+    const form = document.forms["buttonForm"];
+    const response = await fetch("/api/Ukraine/" + url + spawn.id, {
+    method: "GET",
+    headers: { "Accept": "application/json" }
+    });
+    if (response.ok === true) {
+    //Видимость строки ввода
+    document.getElementById("ftb").hidden = false;
+    const line = await response.json();
+    //скрытому элементу id присваивается user.id;
+    form.elements["id"].value = line.id;
+        form.elements["name"].value = line.name;
+    }
+    }
+
+    //Cтроки для городов о районов
+    async function Uncover(spawn, url) {
+    ClearTb();
+    document.getElementById("ftb").hidden = false;
+    const form = document.forms["buttonForm"];
+    form.elements["regionid"].value = spawn.id;
+    form.elements["type"].value = url;
+    const response = await fetch("/api/Ukraine/" + url + "/" + spawn.id, {
+    method: "GET",
+    headers: { "Accept": "application/json" }
+    });
+    if (response.ok === true) {
+    if (url == "Cities")
+    flag = 1;
+    if (url == "District")
+    flag = 2;
+    const tags = await response.json();
+    let rows = document.querySelector("tbody");
+
+    tags.forEach(tags => {
+    rows.append(row(tags, flag));
+    });
+    }
+    }
+
+    //async function EditLine(id,spawn) {
+    //    alert("start");
+    //    const form = document.forms["buttonForm"];
+    //    let regionid = form.elements["regionid"].value;
+
+    //    const response = await fetch("api/Ukraine/City", {
+    //        method: "PUT",
+    //        headers: { "Accept": "application/json", "Content-Type": "application/json" },
+    //        body: JSON.stringify({
+    //            id: parseInt(1, 10),
+    //            region_id: parseInt(1, 10),
+    //            name: spawn
+    //        })
+    //    });
+    //    if (response.ok === true) {
+    //        alert("Успех"); //проверка
+    //        const line = await response.json();
+    //        document.querySelector("tr[data-rowid='" + line.id + "']").replaceWith(row(line));
+    //    }
+    //}
+
+    //Добавление строки
+    async function CreateLine(spawn, url) {
+    const form = document.forms["buttonForm"];
+    let regionid = form.elements["regionid"].value;
+
+    const response = await fetch("api/Ukraine/" + url, {
+    method: "POST",
+    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+    name: spawn,
+    region_id: parseInt(regionid, 10)
+    })
+    });
+    if (response.ok === true) {
+        reset();
+        if (url == "Cities")
+            flag = 1;
+        else
+            flag = 2;
+    const line = await response.json();
+    document.querySelector("tbody").append(row(line,flag));
+    }
+    }
+
+    //Удаление строки
+    async function DeleteLine(spawn, url) {
+    const response = await fetch("/api/Ukraine/" + url + spawn.id + "/del", {
+    method: "DELETE",
+    headers: { "Accept": "application/json" }
+    });
+    if (response.ok === true) {
+    const line = await response.json();
+    document.querySelector("tr[data-rowid='" + line.id + "']").remove();
+    }}
+
+    // создание строк для таблиц
+    function row(spawn, flag) {
+
+    //tr - кол-во строк таблицы
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-rowid", spawn.id);
+    //td - ячейка
+    const idTd = document.createElement("td");
+    idTd.append("-");
+    tr.append(idTd);
+
+    const linksTd = document.createElement("td");
+    const Name = document.createElement("a");
+    Name.setAttribute("data-id", spawn.id);
+    Name.setAttribute("style", "cursor:pointer;padding:20px;font-weight:600;");
+    Name.append(spawn.name);
+    Name.addEventListener("click", e => {
+        e.preventDefault();
+        Uncover(spawn, "Cities");
+    });
+
+    const cityLink = document.createElement("a");
+    cityLink.setAttribute("data-id", spawn.id);
+    cityLink.setAttribute("style", "cursor:pointer;color:gray;");
+    cityLink.append("| Города ");
+    cityLink.addEventListener("click", e => {
+    e.preventDefault();
+    Uncover(spawn, "Cities");
+    });
+
+    const disLink = document.createElement("a");
+    disLink.setAttribute("data-id", spawn.id);
+    disLink.setAttribute("style", "cursor:pointer;color:gray;");
+    disLink.append("| Районы");
+    disLink.addEventListener("click", e => {
+    e.preventDefault();
+    Uncover(spawn, "District");
+    });
+
+    //Изменить
+    const editLink = document.createElement("a");
+    editLink.setAttribute("data-id", spawn.id);
+    editLink.setAttribute("style", "cursor:pointer;color:gray;");
+    editLink.append("| Изменить");
+    editLink.addEventListener("click", e => {
+    e.preventDefault();
+    if (flag == 1)
+    GetLine(spawn, "City/")
+    if (flag == 2)
+    GetLine(spawn, "Distric/")
+    });
+    //Удалить
+    const delLink = document.createElement("a");
+    delLink.setAttribute("data-id", spawn.id);
+    delLink.setAttribute("style", "cursor:pointer;color:DarkRed;");
+    delLink.append(" | Удалить");
+    delLink.addEventListener("click", e => {
+        e.preventDefault();
+    if (flag == 1)
+    DeleteLine(spawn, "Cities/");
+    if (flag == 2)
+    DeleteLine(spawn, "District/");
+    });
+
+    //Добавление кнопок в ячейку
+    linksTd.append(Name);
+
+    if (flag == 0) {
+    linksTd.append(cityLink);
+    linksTd.append(disLink);
+    document.getElementById("submit").hidden = true;
+    }
+    else {
+    document.getElementById("submit").hidden = false;
+    linksTd.append(editLink);
+    linksTd.append(delLink);
+    }
+
+    tr.appendChild(linksTd);
+    return tr;
+    }
+
+    //На главную
+    function GoHome() {
+    ClearTb();
+    GetRegions();
+    }
+
+    //Отправка формы
+    document.forms["buttonForm"].addEventListener("submit", e => {
+    e.preventDefault();
+    const form = document.forms["buttonForm"];
+    const id = form.elements["id"].value;
+    const name = form.elements["name"].value;
+    const type = form.elements["type"].value;
+    //if (id == 0)
+    CreateLine(name, type);
+    //else
+    //  EditLine(id, name);
+    })
+
+    //Очистить таблицу
+    function ClearTb() {
+    document.getElementById("ftb").hidden = true;
+    var table = document.getElementById("tb");
+    table.innerHTML = "";
+    reset();
+    }
+
+    // сброс формы
+    function reset() {
+    const form = document.forms["buttonForm"];
+    form.reset();
+    form.elements["id"].value = 0;
+    }
+
+    GetRegions();
+    </script>
+
+</body>
+</html>
